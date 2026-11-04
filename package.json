@@ -1,0 +1,59 @@
+{
+  "name": "httptape",
+  "version": "0.1.0",
+  "description": "Record and replay HTTP interactions as deterministic JSON tapes for tests",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "httptape": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "precoverage": "npm run build",
+    "coverage": "vitest run --coverage",
+    "dev": "npm run build && node dist/cli.js",
+    "prepack": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "http",
+    "record",
+    "replay",
+    "testing",
+    "mock",
+    "tape",
+    "vcr"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kesheC/httptape.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kesheC/httptape/issues"
+  },
+  "homepage": "https://github.com/kesheC/httptape#readme",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^4.1.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12"
+  }
+}

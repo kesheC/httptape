@@ -1,0 +1,61 @@
+{
+  "formatVersion": 1,
+  "name": "demo",
+  "recordedAt": "2026-11-04T18:39:40.886Z",
+  "interactions": [
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:49678/greet",
+      "requestHeaders": {
+        "host": "127.0.0.1:49678"
+      },
+      "requestBody": null,
+      "status": 200,
+      "responseHeaders": {
+        "content-type": "application/json",
+        "date": "Wed, 04 Nov 2026 18:39:40 GMT",
+        "connection": "keep-alive",
+        "keep-alive": "timeout=5",
+        "transfer-encoding": "chunked"
+      },
+      "responseBody": "{\"hello\":\"world\"}",
+      "recordedAt": "2026-11-04T18:39:40.886Z"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:49678/greet",
+      "requestHeaders": {
+        "host": "127.0.0.1:49678"
+      },
+      "requestBody": null,
+      "status": 200,
+      "responseHeaders": {
+        "content-type": "application/json",
+        "date": "Wed, 04 Nov 2026 18:39:42 GMT",
+        "connection": "keep-alive",
+        "keep-alive": "timeout=5",
+        "transfer-encoding": "chunked"
+      },
+      "responseBody": "{\"hello\":\"world\"}",
+      "recordedAt": "2026-11-04T18:39:42.209Z"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:49678/greet",
+      "requestHeaders": {
+        "host": "127.0.0.1:49678"
+      },
+      "requestBody": null,
+      "status": 200,
+      "responseHeaders": {
+        "content-type": "application/json",
+        "date": "Wed, 04 Nov 2026 18:39:46 GMT",
+        "connection": "keep-alive",
+        "keep-alive": "timeout=5",
+        "transfer-encoding": "chunked"
+      },
+      "responseBody": "{\"hello\":\"world\"}",
+      "recordedAt": "2026-11-04T18:39:46.277Z"
+    }
+  ]
+}
