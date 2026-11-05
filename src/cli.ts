@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { validateTape } from "./tape.js";
 import { TAPE_FORMAT_VERSION } from "./types.js";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.1";
 
 /** Process-entry main. Returns exit code: 0 ok, 1 usage or tape error. */
 export function main(argv: readonly string[], stdout: NodeJS.WritableStream, stderr: NodeJS.WritableStream): number {
