@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { validateTape } from "./tape.js";
 import { TAPE_FORMAT_VERSION } from "./types.js";
+import { installPipeGuard } from "./pipe.js";
 
 export const VERSION = "0.1.1";
 
@@ -95,5 +96,7 @@ function loadTapeSync(path: string) {
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exit(main(process.argv.slice(2), process.stdout, process.stderr));
+  installPipeGuard();
+  // exitCode (not process.exit): lets every path settle before the loop drains.
+  process.exitCode = main(process.argv.slice(2), process.stdout, process.stderr);
 }

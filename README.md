@@ -178,15 +178,15 @@ Forgets which interactions have been consumed, so the same tape can serve a seco
 $ npm ci
 $ npm run build -s
 $ npm test 2>&1 | grep -E 'Test Files|Tests '
- Test Files  5 passed (5)
-      Tests  62 passed (62)
+ Test Files  6 passed (6)
+      Tests  64 passed (64)
 ```
 
 Coverage gate (floors 80/70/85/80 in `vitest.config.ts`):
 
 ```bash
 $ npm run coverage 2>&1 | grep 'All files' | sed 's/ *$//'
-All files  |   95.15 |    90.54 |   95.12 |   95.92 |
+All files  |   91.52 |    88.15 |   88.63 |   92.17 |
 ```
 
 ## API
@@ -282,11 +282,11 @@ demo/demo.tape.json: 1 interactions, format v1 (demo)
 ```bash
 $ npm ci && npm run build -s
 $ npm test 2>&1 | grep -E 'Test Files|Tests '
- Test Files  5 passed (5)
-      Tests  62 passed (62)
+ Test Files  6 passed (6)
+      Tests  64 passed (64)
 ```
 
-覆盖率闸门（`vitest.config.ts` 中下限 80/70/85/80）：全文件 95.15 语句 / 90.54 分支 / 95.12 函数 / 95.92 行。
+覆盖率闸门（`vitest.config.ts` 中下限 80/70/85/80）：全文件 91.52 语句 / 88.15 分支 / 88.63 函数 / 92.17 行。
 
 ### 许可
 
