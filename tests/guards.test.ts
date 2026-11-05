@@ -138,3 +138,24 @@ describe("release workflow guards", () => {
     expect(extract).toContain("exit 1");
   });
 });
+describe("config guards", () => {
+  it("ignores vitest majors only as a pinned pair with coverage-v8", () => {
+    // dependabot.yml documents why the pair is held together; this test is
+    // the enforcement the comment points at.
+    const text = readRepo(".github/dependabot.yml");
+    expect(text).toContain('dependency-name: "vitest"');
+    expect(text).toContain('dependency-name: "@vitest/coverage-v8"');
+  });
+
+  it("keeps the coverage floors in place", () => {
+    const cfg = stripComments(readRepo("vitest.config.ts"));
+    expect(cfg).toContain("statements: 80");
+    expect(cfg).toContain("branches: 70");
+    expect(cfg).toContain("functions: 85");
+    expect(cfg).toContain("lines: 80");
+  });
+
+  it("resolves the CLI entry through realpathSync", () => {
+    expect(readRepo("src/cli.ts")).toContain("realpathSync");
+  });
+});

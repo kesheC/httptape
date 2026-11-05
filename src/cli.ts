@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
 import { validateTape } from "./tape.js";
 import { TAPE_FORMAT_VERSION } from "./types.js";
 import { installPipeGuard } from "./pipe.js";
@@ -95,7 +96,7 @@ function loadTapeSync(path: string) {
   return validateTape(JSON.parse(raw));
 }
 
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   installPipeGuard();
   // exitCode (not process.exit): lets every path settle before the loop drains.
   process.exitCode = main(process.argv.slice(2), process.stdout, process.stderr);

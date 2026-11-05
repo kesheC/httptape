@@ -305,3 +305,157 @@ describe("replay consumption keys on the resolved path", () => {
     }
   });
 });
+describe("fourth audit round fixes", () => {
+  it("redacts any header whose name mentions a credential", async () => {
+    const interaction = await record("http://127.0.0.1:" + port + "/echo", {
+      name: "credpattern",
+      outPath: "credpattern-tmp.tape.json",
+      headers: { "x-api-key": "sk-123", "session-token": "tok", "x-innocent": "keep" },
+    });
+    expect(interaction.requestHeaders["x-api-key"]).toBe("[REDACTED]");
+    expect(interaction.requestHeaders["session-token"]).toBe("[REDACTED]");
+    expect(interaction.requestHeaders["x-innocent"]).toBe("keep");
+    rmSync("credpattern-tmp.tape.json", { force: true });
+  });
+
+  it("strips userinfo from the stored interaction URL", async () => {
+    const interaction = await record("http://user:pass@127.0.0.1:" + port + "/echo", {
+      name: "userinfo",
+      outPath: "userinfo-tmp.tape.json",
+    });
+    expect(interaction.url).not.toContain("user:pass");
+    expect(interaction.url).toContain("/echo");
+    rmSync("userinfo-tmp.tape.json", { force: true });
+  });
+
+  it("matches a replay request that still carries userinfo", async () => {
+    const tapePath = join("consumed", "usermatch.tape.json");
+    const tape = emptyTape("usermatch");
+    tape.interactions.push({
+      method: "GET",
+      url: "http://tape.test/api",
+      requestHeaders: {},
+      requestBody: null,
+      status: 200,
+      responseHeaders: {},
+      responseBody: "ok",
+      recordedAt: "2026-11-05T00:00:00.000Z",
+    });
+    await saveTape(tapePath, tape);
+    try {
+      resetReplay();
+      const result = await replay(
+        { method: "GET", url: "http://user:pass@tape.test/api" },
+        { tapePath },
+      );
+      expect(result.matched).toBe(true);
+      expect(result.body).toBe("ok");
+    } finally {
+      resetReplay();
+      rmSync(tapePath, { force: true });
+    }
+  });
+
+  it("keeps the query string out of NoMatchError messages", async () => {
+    const error = await replay(
+      { method: "GET", url: "http://127.0.0.1:" + port + "/echo?token=supersecret" },
+      { tapePath: "release.tape.json" },
+    ).catch((e: Error) => e);
+    expect(error).toBeInstanceOf(NoMatchError);
+    expect((error as Error).message).not.toContain("supersecret");
+  });
+
+  it("record-mode misses forward request headers onto the tape", async () => {
+    const missing = join("consumed", "headers-record.tape.json");
+    rmSync(missing, { force: true });
+    const result = await replay(
+      { method: "GET", url: "http://127.0.0.1:" + port + "/echo", headers: { "x-probe": "probe-value" } },
+      { tapePath: missing, mode: "record" },
+    );
+    expect(result.matched).toBe(true);
+    expect(result.interaction!.requestHeaders["x-probe"]).toBe("probe-value");
+    rmSync(missing, { force: true });
+  });
+
+  it("stub mode replays a matching interaction instead of the 599 fallback", async () => {
+    const result = await replay(
+      { method: "GET", url: "http://127.0.0.1:" + port + "/echo" },
+      { tapePath: "release.tape.json", mode: "stub" },
+    );
+    expect(result.matched).toBe(true);
+    expect(result.status).toBe(201);
+    expect(result.headers["x-httptape"]).toBeUndefined();
+  });
+
+  it("strict mode turns a TRACE request into NoMatchError, not TapeError", async () => {
+    await expect(
+      replay({ method: "TRACE", url: "http://127.0.0.1:" + port + "/anything" }, { tapePath: "release.tape.json" }),
+    ).rejects.toThrow(NoMatchError);
+  });
+
+  it("sends Buffer request bodies as raw bytes and stores null", async () => {
+    const raw = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (c: Buffer) => chunks.push(c));
+      req.on("end", () => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ bytes: [...Buffer.concat(chunks)] }));
+      });
+    });
+    await new Promise<void>((resolve) => raw.listen(0, "127.0.0.1", resolve));
+    const rport = (raw.address() as { port: number }).port;
+    try {
+      const interaction = await record("http://127.0.0.1:" + rport + "/raw", {
+        name: "bufbody",
+        outPath: "bufbody-tmp.tape.json",
+        method: "POST",
+        body: Buffer.from([0x00, 0xff, 0xfe]),
+      });
+      expect(interaction.requestBody).toBeNull();
+      expect(interaction.responseBody).toBe(JSON.stringify({ bytes: [0, 255, 254] }));
+    } finally {
+      raw.close();
+      rmSync("bufbody-tmp.tape.json", { force: true });
+    }
+  });
+
+  it("validates interaction status codes as integers 100..599", async () => {
+    const { validateTape } = await import("../src/tape.js");
+    const { TapeError } = await import("../src/errors.js");
+    const mk = (status: unknown) => {
+      const tape = emptyTape("status");
+      tape.interactions.push({
+        method: "GET",
+        url: "http://x/",
+        requestHeaders: {},
+        requestBody: null,
+        status: status as number,
+        responseHeaders: {},
+        responseBody: null,
+        recordedAt: "2026-11-05T00:00:00.000Z",
+      });
+      return tape;
+    };
+    expect(() => validateTape(mk(99))).toThrow(TapeError);
+    expect(() => validateTape(mk(600))).toThrow(TapeError);
+    expect(() => validateTape(mk(200.5))).toThrow(TapeError);
+    expect(() => validateTape(mk("200" as unknown as number))).toThrow(TapeError);
+    expect(() => validateTape(mk(599))).not.toThrow();
+  });
+
+  it("saveTape refuses to persist an invalid tape", async () => {
+    const { TapeError } = await import("../src/errors.js");
+    const bad = emptyTape("bad");
+    bad.interactions.push({
+      method: "GET",
+      url: "http://x/",
+      requestHeaders: {},
+      requestBody: null,
+      status: 700,
+      responseHeaders: {},
+      responseBody: null,
+      recordedAt: "2026-11-05T00:00:00.000Z",
+    });
+    await expect(saveTape("bad-tmp.tape.json", bad)).rejects.toThrow(TapeError);
+  });
+});

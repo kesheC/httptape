@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { loadTape, emptyTape } from "./tape.js";
+import { TapeError } from "./errors.js";
 import { findMatch, describeRequest } from "./match.js";
 import { NoMatchError } from "./errors.js";
 import type { ReplayOptions, ReplayResult, Tape } from "./types.js";
@@ -24,7 +25,7 @@ export function tapeKey(tapePath: string): string {
  * race a read-modify-write, so serialize them (or use one tape per writer).
  */
 export async function replay(
-  request: { method: string; url: string; body?: string | null },
+  request: { method: string; url: string; body?: string | null; headers?: Record<string, string> },
   options: ReplayOptions,
 ): Promise<ReplayResult> {
   const mode = options.mode ?? "strict";
@@ -35,10 +36,34 @@ export async function replay(
   const key = tapeKey(options.tapePath);
   const played = replayState.playedPerTape.get(key) ?? new Set<number>();
 
+  let found: { index: number; interaction: (typeof tape.interactions)[number] } | null = null;
+  try {
+    found = findMatch(tape.interactions, request, {
+      matchBody: options.matchBody,
+      played,
+    });
+  } catch (error) {
+    // A method a tape can never hold (TRACE, CONNECT, ...) must read as "no
+    // match", not as a crash - in stub mode that means the 599 contract, in
+    // strict mode a NoMatchError.
+    if (!(error instanceof TapeError)) {
+      throw error;
+    }
+  }
+
   if (mode === "stub") {
-    // The stub contract (README): any request gets a deterministic 599 and
-    // network is never touched. Dispatch before matching so even methods a
-    // tape can never hold (TRACE, CONNECT, ...) answer instead of throwing.
+    // The stub contract (README): a request the tape can answer is answered
+    // from the tape; anything else gets a deterministic 599, and network is
+    // never touched in either case.
+    if (found) {
+      return {
+        matched: true,
+        status: found.interaction.status,
+        headers: { ...found.interaction.responseHeaders },
+        body: found.interaction.responseBody ?? "",
+        interaction: found.interaction,
+      };
+    }
     return {
       matched: false,
       status: 599,
@@ -46,11 +71,6 @@ export async function replay(
       body: "",
     };
   }
-
-  const found = findMatch(tape.interactions, request, {
-    matchBody: options.matchBody,
-    played,
-  });
 
   if (found) {
     played.add(found.index);
@@ -69,13 +89,16 @@ export async function replay(
     const message = "no recorded interaction for " + described + " in " + options.tapePath;
     throw new NoMatchError(message, { method: request.method, url: request.url });
   }
-  // mode === "record": perform the exchange for real and append it.
+  // mode === "record": perform the exchange for real and append it. Headers
+  // come from the live request shape first, then the options object, so a
+  // caller can get authenticated requests onto the tape.
   const { record } = await import("./record.js");
   const interaction = await record(request.url, {
     name: tape.name,
     outPath: options.tapePath,
     method: request.method,
     body: request.body ?? undefined,
+    headers: request.headers ?? options.headers,
   });
   return {
     matched: true,

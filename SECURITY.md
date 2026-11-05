@@ -30,7 +30,7 @@ This is a small project maintained on a best-effort basis. You should get an ack
 
 ## Scope
 
-Audit .env drift and secret leaks in your repository — zero dependencies.
+Record and replay HTTP interactions from JSON tape files — zero dependencies.
 
 In scope:
 

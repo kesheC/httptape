@@ -4,8 +4,16 @@ import { URL } from "node:url";
 import { loadTape, saveTape, emptyTape } from "./tape.js";
 import type { Interaction, HttpMethod, RecordOptions } from "./types.js";
 import { isHttpMethod } from "./types.js";
+import { stripUserInfo } from "./match.js";
 
 const DEFAULT_REDACT = ["authorization", "cookie", "set-cookie", "proxy-authorization"];
+
+/**
+ * Header names matching this pattern carry credentials in practice
+ * (x-api-key, x-auth-token, session-token, client-secret, ...), so they
+ * are redacted on top of the explicit {@link DEFAULT_REDACT} list.
+ */
+const CREDENTIAL_PATTERN = /(?:auth|key|token|secret|password|credential|signature)/i;
 
 /** Default wall-clock cap for one recorded exchange. */
 const DEFAULT_RECORD_TIMEOUT_MS = 30_000;
@@ -45,13 +53,17 @@ export async function record(
   }
   // RFC 7231: a HEAD request carries no body. Sending one is undefined, so
   // recording drops it instead of storing a body the replay can never match.
-  const requestBody =
-    method === "HEAD" || options.body == null ? null : String(options.body);
+  const rawBody: string | Buffer | null =
+    method === "HEAD" || options.body == null ? null : options.body;
+  // A Buffer is sent as raw bytes but stored as text-or-null: the tape
+  // promises UTF-8 text, never a lossy mojibake rewrite (decodeBody).
+  const requestBody: string | null =
+    rawBody == null || typeof rawBody === "string" ? rawBody : decodeBody(rawBody);
   const response = await perform(
     transport,
     parsed,
     options,
-    requestBody,
+    rawBody,
     options.timeoutMs ?? DEFAULT_RECORD_TIMEOUT_MS,
   );
 
@@ -60,7 +72,7 @@ export async function record(
 
   const interaction: Interaction = {
     method: method as HttpMethod,
-    url,
+    url: stripUserInfo(url),
     requestHeaders: redact(response.sentHeaders, options.redactHeaders),
     requestBody,
     status: response.status,
@@ -84,7 +96,7 @@ function perform(
   transport: typeof httpRequest,
   parsed: URL,
   options: RequestOptions,
-  body: string | null,
+  body: string | Buffer | null,
   timeoutMs: number,
 ): Promise<Performed> {
   return new Promise((resolve, reject) => {
@@ -162,7 +174,7 @@ function redact(
   const banned = new Set([...DEFAULT_REDACT, ...(extra ?? []).map((h) => h.toLowerCase())]);
   const out: Record<string, string> = {};
   for (const [name, value] of Object.entries(headers)) {
-    out[name] = banned.has(name.toLowerCase()) ? "[REDACTED]" : value;
+    out[name] = banned.has(name.toLowerCase()) || CREDENTIAL_PATTERN.test(name) ? "[REDACTED]" : value;
   }
   return out;
 }

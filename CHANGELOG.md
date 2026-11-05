@@ -8,7 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- nothing yet
+- Replay forwards request headers on record-mode misses (from the request shape or the `headers` option), so authenticated requests land on the tape.
+- Stub mode answers a matching interaction from the tape; the deterministic 599 is only the miss fallback.
+
+### Fixed
+- Header redaction covers any header whose name mentions a credential (`x-api-key`, `session-token`, ...), not just the four fixed names.
+- URL userinfo is stripped before interactions are stored, and `NoMatchError` messages carry origin and path only - no query string.
+- `Buffer` request bodies are sent as raw bytes and stored as `null` instead of a lossy rewrite.
+- Tape validation enforces integer HTTP status codes 100..599, and `saveTape` refuses to persist an invalid tape.
+- The CLI entry resolves through `realpathSync`, so a symlinked bin still detects the main module.
 
 ## [0.1.1] - 2026-11-05
 

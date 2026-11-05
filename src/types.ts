@@ -75,6 +75,12 @@ export interface ReplayOptions {
   mode?: ReplayMode;
   /** Match request bodies too, not just method and URL. Default false. */
   matchBody?: boolean;
+  /**
+   * Headers for the outgoing request in `"record"` mode. The live request
+   * shape is `{ method, url, body?, headers? }`; this option backfills
+   * headers when only the options object is available. Default none.
+   */
+  headers?: Record<string, string>;
 }
 
 /** What a single replayed call produced. */
@@ -95,8 +101,9 @@ export interface ReplayResult {
 export interface RecordOptions {
   /** Tape name (becomes `name` and the default file stem). */
   name: string;
-  /** Request body to send; null/undefined means no body. */
-  body?: string | null;
+  /** Request body to send; a Buffer is sent as raw bytes and stored as
+   * text-or-null (the tape only holds UTF-8 text). null/undefined means none. */
+  body?: string | Buffer | null;
   /** Where to write the tape file. Default `<name>.tape.json` in cwd. */
   outPath?: string;
   /** Extra headers to strip from captures (case-insensitive names). */

@@ -50,13 +50,27 @@ function validateInteraction(raw: unknown, index: number): void {
   };
   need("method", "string");
   need("url", "string");
-  need("requestHeaders", "object");
+  needHeaders("requestHeaders", it["requestHeaders"], index);
   need("requestBody", "string|null");
-  need("status", "number");
-  need("responseHeaders", "object");
+  const status = it["status"];
+  if (typeof status !== "number" || !Number.isInteger(status) || status < 100 || status > 599) {
+    throw new TapeError(`interactions[${index}].status must be an HTTP status code (integer 100..599)`);
+  }
+  needHeaders("responseHeaders", it["responseHeaders"], index);
   need("responseBody", "string|null");
   if (typeof it["recordedAt"] !== "string" || !ISO_8601.test(it["recordedAt"])) {
     throw new TapeError(`interactions[${index}].recordedAt must be an ISO-8601 string`);
+  }
+}
+
+function needHeaders(key: string, value: unknown, index: number): void {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TapeError(`interactions[${index}].${key} must be object`);
+  }
+  for (const [name, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v !== "string") {
+      throw new TapeError(`interactions[${index}].${key}.${name} must be a string`);
+    }
   }
 }
 
@@ -92,6 +106,9 @@ export function serializeTape(tape: Tape): string {
  * mid-write) never observes a half-written tape.
  */
 export async function saveTape(path: string, tape: Tape): Promise<void> {
+  // Validate before writing so the package can never persist a tape its own
+  // readers reject (a NaN status serialized to null used to self-destruct).
+  validateTape(tape);
   const tempPath = `${path}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
   await writeFile(tempPath, serializeTape(tape), "utf8");
   try {

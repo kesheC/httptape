@@ -9,15 +9,17 @@ A tape is a diffable JSON file: you can read it, review it in a pull request, an
 - **Record once, replay forever.** Point `record()` at a running service once; every later test run reads the tape file.
 - **Strict mode is the point.** An unmatched request throws `NoMatchError` naming method and URL — a tape that drifts from the code fails loudly instead of silently passing with fake data.
 - **Zero runtime dependencies.** The whole package is `node:http`, `node:fs`, and plain TypeScript.
-- **Redaction built in.** `authorization`, `cookie`, `set-cookie`, and `proxy-authorization` headers are captured as `[REDACTED]`.
+- **Redaction built in.** `authorization`, `cookie`, `set-cookie`, and `proxy-authorization` headers are captured as `[REDACTED]` — and so is any header whose name mentions a credential (`x-api-key`, `session-token`, `client-secret`, ...). URL userinfo is stripped from stored interactions, and error messages never carry the query string.
 
 ## Install
 
 ```bash
-$ npm install httptape
+$ npm install github:kesheC/httptape#v0.1.1
 
-added 1 package, and audited 2 packages in …
+added 1 package in …
 ```
+
+The package is not on the npm registry; install from this repository (or from a release tarball on the [Releases page](https://github.com/kesheC/httptape/releases)).
 
 ## Quickstart
 
@@ -135,6 +137,8 @@ Exit codes: 0 ok, 1 usage or invalid tape.
 | `stub` | deterministic `599` with `x-httptape: stub` | never |
 | `record` | performs the real exchange, appends it to the tape | only for misses |
 
+`stub` answers from the tape when an interaction matches; the deterministic `599` is only the miss fallback.
+
 Strict mode failing looks like this — the error names the method and URL so you know exactly which interaction is missing:
 
 ```bash
@@ -151,11 +155,11 @@ Performs the request for real and appends the exchange to the tape file (`option
 
 **Redirects are recorded, not followed.** A `3xx` response goes into the tape exactly as the server returned it — status, headers, body — with no `Location` chase. Record each hop of a redirect chain as its own interaction; `replay` then serves the recorded hops in tape order.
 
-**Bodies are stored as text or null.** A request or response body is stored as the string it carries only when the bytes decode as UTF-8; binary payloads are stored as `null` (never a lossy rewrite), and a `HEAD` request records no body at all.
+**Bodies are stored as text or null.** A request or response body is stored as the string it carries only when the bytes decode as UTF-8; binary payloads (including `Buffer` request bodies, which are still sent as raw bytes) are stored as `null` (never a lossy rewrite), and a `HEAD` request records no body at all.
 
 ### `replay(request, options)`
 
-Answers one request from the tape. Options: `tapePath` (required), `mode` (`strict` / `stub` / `record`), `matchBody` (also compare request bodies; default false). Returns `{ matched, status, headers, body, interaction }`.
+Answers one request from the tape. Options: `tapePath` (required), `mode` (`strict` / `stub` / `record`), `matchBody` (also compare request bodies; default false), `headers` (request headers used by `"record"`-mode misses; the request shape also accepts a `headers` field). Returns `{ matched, status, headers, body, interaction }`. A recorded `null` body replays as an empty string.
 
 ### `resetReplay(tapePath?)`
 
@@ -179,14 +183,14 @@ $ npm ci
 $ npm run build -s
 $ npm test 2>&1 | grep -E 'Test Files|Tests '
  Test Files  6 passed (6)
-      Tests  64 passed (64)
+      Tests  77 passed (77)
 ```
 
 Coverage gate (floors 80/70/85/80 in `vitest.config.ts`):
 
 ```bash
 $ npm run coverage 2>&1 | grep 'All files' | sed 's/ *$//'
-All files  |   91.52 |    88.15 |   88.63 |   92.17 |
+All files  |   90.18 |    84.15 |   89.58 |   90.73 |
 ```
 
 ## API
@@ -217,15 +221,17 @@ All files  |   91.52 |    88.15 |   88.63 |   92.17 |
 - **录一次，永远回放。** `record()` 对真实服务录一遍；之后每次测试都读磁带文件。
 - **strict 模式是核心。** 未匹配的请求抛 `NoMatchError`，报出方法与 URL——磁带与代码漂移时大声失败，而不是拿假数据悄悄通过。
 - **零运行时依赖。** 整个包只有 `node:http`、`node:fs` 与纯 TypeScript。
-- **内置脱敏。** `authorization`、`cookie`、`set-cookie`、`proxy-authorization` 头录制为 `[REDACTED]`。
+- **内置脱敏。** `authorization`、`cookie`、`set-cookie`、`proxy-authorization` 头录制为 `[REDACTED]`——名字带凭据语义的头（`x-api-key`、`session-token`、`client-secret` 等）同样脱敏；URL userinfo 在入库前剥除，错误消息不带查询串。
 
 ### 安装与快速上手
 
 ```bash
-$ npm install httptape
+$ npm install github:kesheC/httptape#v0.1.1
 
-added 1 package, and audited 2 packages in …
+added 1 package in …
 ```
+
+包未发布到 npm registry；请从本仓库安装（或从 [Releases 页](https://github.com/kesheC/httptape/releases) 下载发版 tarball）。
 
 录制一次（对着本地固定端口起的小服务器），服务器关掉后回放：
 
@@ -246,8 +252,18 @@ unmatched: no recorded interaction for DELETE http://127.0.0.1:49678/greet in de
     {
       "method": "GET",
       "url": "http://127.0.0.1:49678/greet",
+      "requestHeaders": {
+        "host": "127.0.0.1:49678"
+      },
       "requestBody": null,
       "status": 200,
+      "responseHeaders": {
+        "content-type": "application/json",
+        "date": "Wed, 04 Nov 2026 …GMT",
+        "connection": "keep-alive",
+        "keep-alive": "timeout=5",
+        "transfer-encoding": "chunked"
+      },
       "responseBody": "{\"hello\":\"world\"}",
       "recordedAt": "2026-11-04T18:37:04.947Z"
     }
@@ -263,9 +279,11 @@ unmatched: no recorded interaction for DELETE http://127.0.0.1:49678/greet in de
 | `stub` | 确定性 `599`，带 `x-httptape: stub` | 永不 |
 | `record` | 真实执行并追加进磁带 | 仅未匹配时 |
 
+`stub` 在磁带有匹配交互时直接回放该交互；确定性 `599` 只是未匹配时的兜底。
+
 **重定向原样录制。** `record` 不跟随重定向：`3xx` 响应按服务器原样（状态、头、体）入库，不追 `Location`；重定向链的每一跳各自录制一条交互，`replay` 按磁带顺序依次返回各跳。
 
-**请求体/响应体存文本或 null。** 请求与响应体仅在其字节能按 UTF-8 解码时以字符串入库；二进制载荷存 `null`（绝不有损改写），`HEAD` 请求则完全不记请求体。
+**请求体/响应体存文本或 null。** 请求与响应体仅在其字节能按 UTF-8 解码时以字符串入库；二进制载荷（含以原始字节发送的 `Buffer` 请求体）存 `null`（绝不有损改写），`HEAD` 请求则完全不记请求体。
 
 并发注意：对同一磁带并发使用 `replay(mode: "record")` 不受支持——每次未匹配都要对磁带做读-改-写，并发录制可能丢交互；同一磁带的录制请串行。
 
@@ -283,10 +301,10 @@ demo/demo.tape.json: 1 interactions, format v1 (demo)
 $ npm ci && npm run build -s
 $ npm test 2>&1 | grep -E 'Test Files|Tests '
  Test Files  6 passed (6)
-      Tests  64 passed (64)
+      Tests  77 passed (77)
 ```
 
-覆盖率闸门（`vitest.config.ts` 中下限 80/70/85/80）：全文件 91.52 语句 / 88.15 分支 / 88.63 函数 / 92.17 行。
+覆盖率闸门（`vitest.config.ts` 中下限 80/70/85/80）：全文件 90.18 语句 / 84.15 分支 / 89.58 函数 / 90.73 行。
 
 ### 许可
 
