@@ -6,7 +6,7 @@ import { validateTape } from "./tape.js";
 import { TAPE_FORMAT_VERSION } from "./types.js";
 import { installPipeGuard } from "./pipe.js";
 
-export const VERSION = "0.1.1";
+export const VERSION = "0.1.2";
 
 /** Process-entry main. Returns exit code: 0 ok, 1 usage or tape error. */
 export function main(argv: readonly string[], stdout: NodeJS.WritableStream, stderr: NodeJS.WritableStream): number {

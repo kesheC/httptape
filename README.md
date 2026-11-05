@@ -14,7 +14,7 @@ A tape is a diffable JSON file: you can read it, review it in a pull request, an
 ## Install
 
 ```bash
-$ npm install github:kesheC/httptape#v0.1.1
+$ npm install github:kesheC/httptape#v0.1.2
 
 added 1 package in …
 ```
@@ -226,7 +226,7 @@ All files  |   90.18 |    84.15 |   89.58 |   90.73 |
 ### 安装与快速上手
 
 ```bash
-$ npm install github:kesheC/httptape#v0.1.1
+$ npm install github:kesheC/httptape#v0.1.2
 
 added 1 package in …
 ```
