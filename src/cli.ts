@@ -1,4 +1,6 @@
+#!/usr/bin/env node
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { validateTape } from "./tape.js";
 import { TAPE_FORMAT_VERSION } from "./types.js";
 
@@ -92,6 +94,6 @@ function loadTapeSync(path: string) {
   return validateTape(JSON.parse(raw));
 }
 
-if (process.argv[1] !== undefined && import.meta.url === new URL("file:///" + process.argv[1].replace(/\\/g, "/")).href) {
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exit(main(process.argv.slice(2), process.stdout, process.stderr));
 }

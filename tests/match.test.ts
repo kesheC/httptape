@@ -60,6 +60,12 @@ describe("findMatch", () => {
     ).toBe(0);
   });
 
+  it("matches a hand-edited lowercase tape method on both sides", () => {
+    const list = [interaction({ method: "get" as never })];
+    expect(findMatch(list, { method: "GET", url: "http://localhost:1/api" })?.index).toBe(0);
+    expect(findMatch(list, { method: "get", url: "http://localhost:1/api" })?.index).toBe(0);
+  });
+
   it("throws on a method outside the recorded vocabulary", () => {
     expect(() => findMatch([], { method: "TRACE", url: "http://x/" })).toThrow(TapeError);
   });

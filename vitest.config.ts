@@ -19,7 +19,7 @@ export default defineConfig({
       // the run into a gate. They sit just under what the suite reaches today,
       // so an unrelated change is not punished, while a real regression fails
       // `npm run coverage` instead of showing up as a smaller number in a log
-      // nobody reads. tests/workflow.test.ts keeps all four of them in place.
+      // nobody reads. tests/guards.test.ts keeps all four of them in place.
       thresholds: { statements: 80, branches: 70, functions: 85, lines: 80 },
       reporter: ["text"],
       exclude: ["dist/**", "tests/**", "scripts/**", "demo/**", "**/*.test.ts", "**/*.spec.ts"],

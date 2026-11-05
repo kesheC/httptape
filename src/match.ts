@@ -11,7 +11,8 @@ export interface MatchRequest {
 
 /**
  * Find the first unplayed interaction matching the request. Method compares
- * case-insensitively; URL compares exactly after trimming the fragment. When
+ * case-insensitively on both sides (a hand-edited lowercase tape entry still
+ * matches); URL compares exactly after trimming the fragment. When
  * `matchBody` is set, a recorded null body matches only an empty/absent one.
  * Throws {@link TapeError} when the method is not one of the seven recorded.
  */
@@ -29,7 +30,7 @@ export function findMatch(
     if (options.played?.has(index)) {
     continue;
     }
-    if (interaction.method !== method) {
+    if (interaction.method.toUpperCase() !== method) {
     continue;
     }
     if (stripFragment(interaction.url) !== wantedUrl) {

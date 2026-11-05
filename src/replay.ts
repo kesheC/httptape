@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { loadTape } from "./tape.js";
 import { findMatch, describeRequest } from "./match.js";
 import { NoMatchError } from "./errors.js";
@@ -8,6 +9,9 @@ import type { ReplayOptions, ReplayResult, Tape } from "./types.js";
  * `"strict"`: an unmatched request throws {@link NoMatchError} naming the
  * method and URL, which is the signal that the tape and the code disagree
  * and a human should look. `"stub"` never throws and never touches network.
+ * `"record"` performs a miss for real and appends it; that path is not
+ * concurrency-safe for one tape - concurrent record calls on the same tape
+ * race a read-modify-write, so serialize them (or use one tape per writer).
  */
 export async function replay(
   request: { method: string; url: string; body?: string | null },
@@ -15,7 +19,11 @@ export async function replay(
 ): Promise<ReplayResult> {
   const mode = options.mode ?? "strict";
   const tape: Tape = await loadTape(options.tapePath);
-  const played = replayState.playedPerTape.get(options.tapePath) ?? new Set<number>();
+  // Key the per-tape consumption state by the resolved absolute path, so
+  // "./a.tape.json" and "a.tape.json" share one Set instead of each silently
+  // replaying the first interaction.
+  const tapeKey = resolve(options.tapePath);
+  const played = replayState.playedPerTape.get(tapeKey) ?? new Set<number>();
 
   const found = findMatch(tape.interactions, request, {
     matchBody: options.matchBody,
@@ -24,7 +32,7 @@ export async function replay(
 
   if (found) {
     played.add(found.index);
-    replayState.playedPerTape.set(options.tapePath, played);
+    replayState.playedPerTape.set(tapeKey, played);
     return {
       matched: true,
       status: found.interaction.status,
@@ -69,7 +77,7 @@ export function resetReplay(tapePath?: string): void {
   if (tapePath === undefined) {
     replayState.playedPerTape.clear();
   } else {
-    replayState.playedPerTape.delete(tapePath);
+    replayState.playedPerTape.delete(resolve(tapePath));
   }
 }
 

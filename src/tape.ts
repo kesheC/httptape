@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { TAPE_FORMAT_VERSION, type Interaction, type Tape } from "./types.js";
 import { TapeError } from "./errors.js";
 
@@ -80,9 +81,20 @@ export function serializeTape(tape: Tape): string {
   return `${JSON.stringify(tape, null, 2)}\n`;
 }
 
-/** Write a tape file atomically enough for tests: full content, single write. */
+/**
+ * Write a tape file atomically: serialize to a unique temp file in the same
+ * directory, then rename it over the target, so a reader (or a crash
+ * mid-write) never observes a half-written tape.
+ */
 export async function saveTape(path: string, tape: Tape): Promise<void> {
-  await writeFile(path, serializeTape(tape), "utf8");
+  const tempPath = `${path}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+  await writeFile(tempPath, serializeTape(tape), "utf8");
+  try {
+    await rename(tempPath, path);
+  } catch (error) {
+    await rm(tempPath, { force: true });
+    throw error;
+  }
 }
 
 /** Build an empty tape with the given name. */

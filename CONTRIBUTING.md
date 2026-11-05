@@ -25,7 +25,7 @@ The same list is derived from `.github/workflows/ci.yml` and pinned by `tests/gu
 
 1. **Zero runtime dependencies.** `npm run test` guards `dependencies: {}` in package.json.
 2. **Tests are offline.** The only network used is a loopback `node:http` server started inside the test process.
-3. **README transcripts must reproduce.** Every command block in README.md is executed verbatim by the maintainers' transcript harness; do not edit output you have not produced yourself.
+3. **README transcripts are hand-verified.** Maintainers re-run every command block in README.md with the vtf3 transcript tool before a release; CI runs unit and guard tests only and never re-executes the transcripts. Do not edit output you have not produced yourself.
 4. **No hand-maintained mutable numbers.** Counts that appear in docs must be pinned by a test or expressed structurally.
 
 ## Releases

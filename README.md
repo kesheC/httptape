@@ -147,7 +147,9 @@ unmatched: no recorded interaction for DELETE http://127.0.0.1:49678/greet in de
 
 ### `record(url, options)`
 
-Performs the request for real and appends the exchange to the tape file (`options.outPath`, default `<name>.tape.json`). Options: `name` (required), `method`, `body`, `headers`, `outPath`, `redactHeaders` (extra header names to redact, case-insensitive).
+Performs the request for real and appends the exchange to the tape file (`options.outPath`, default `<name>.tape.json`). Options: `name` (required), `method`, `body`, `headers`, `outPath`, `redactHeaders` (extra header names to redact, case-insensitive), `timeoutMs` (wall-clock cap on the whole exchange in milliseconds, default 30000; on expiry the request is destroyed and `record` rejects with a readable timeout error).
+
+**Redirects are recorded, not followed.** A `3xx` response goes into the tape exactly as the server returned it — status, headers, body — with no `Location` chase. Record each hop of a redirect chain as its own interaction; `replay` then serves the recorded hops in tape order.
 
 ### `replay(request, options)`
 
@@ -166,6 +168,7 @@ Forgets which interactions have been consumed, so the same tape can serve a seco
 - Method compares case-insensitively; URL compares exactly, ignoring the `#fragment`.
 - Interactions are consumed in tape order: the second identical request gets the second matching entry. `resetReplay()` rewinds this.
 - With `matchBody: true`, a recorded `null` body matches only an absent or empty request body.
+- Concurrent `replay` calls with `mode: "record"` on the same tape are not supported: each miss rewrites the tape file via a read-modify-write, so concurrent recorders can lose interactions. Serialize recording per tape, or give each writer its own tape.
 
 ## Development
 
@@ -174,14 +177,14 @@ $ npm ci
 $ npm run build -s
 $ npm test 2>&1 | grep -E 'Test Files|Tests '
  Test Files  5 passed (5)
-      Tests  46 passed (46)
+      Tests  52 passed (52)
 ```
 
 Coverage gate (floors 80/70/85/80 in `vitest.config.ts`):
 
 ```bash
 $ npm run coverage 2>&1 | grep 'All files' | sed 's/ *$//'
-All files  |   94.11 |     87.7 |   96.66 |   94.59 |
+All files  |   93.36 |    88.09 |   94.73 |   94.14 |
 ```
 
 ## API
@@ -258,6 +261,10 @@ unmatched: no recorded interaction for DELETE http://127.0.0.1:49678/greet in de
 | `stub` | 确定性 `599`，带 `x-httptape: stub` | 永不 |
 | `record` | 真实执行并追加进磁带 | 仅未匹配时 |
 
+**重定向原样录制。** `record` 不跟随重定向：`3xx` 响应按服务器原样（状态、头、体）入库，不追 `Location`；重定向链的每一跳各自录制一条交互，`replay` 按磁带顺序依次返回各跳。
+
+并发注意：对同一磁带并发使用 `replay(mode: "record")` 不受支持——每次未匹配都要对磁带做读-改-写，并发录制可能丢交互；同一磁带的录制请串行。
+
 ### CLI
 
 ```bash
@@ -272,10 +279,10 @@ demo/demo.tape.json: 1 interactions, format v1 (demo)
 $ npm ci && npm run build -s
 $ npm test 2>&1 | grep -E 'Test Files|Tests '
  Test Files  5 passed (5)
-      Tests  46 passed (46)
+      Tests  52 passed (52)
 ```
 
-覆盖率闸门（`vitest.config.ts` 中下限 80/70/85/80）：全文件 94.11 语句 / 87.7 分支 / 96.66 函数 / 94.59 行。
+覆盖率闸门（`vitest.config.ts` 中下限 80/70/85/80）：全文件 93.36 语句 / 88.09 分支 / 94.73 函数 / 94.14 行。
 
 ### 许可
 

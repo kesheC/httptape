@@ -79,6 +79,14 @@ describe("ci guards", () => {
   });
 });
 
+describe("cli entry guards", () => {
+  it("dist/cli.js starts with the node shebang", () => {
+    // package.json's pretest builds dist/ before vitest runs, so the file exists.
+    const firstLine = readRepo("dist/cli.js").split("\n")[0];
+    expect(firstLine).toBe("#!/usr/bin/env node");
+  });
+});
+
 describe("release workflow guards", () => {
   it("gates the tag against package.json before any gh call", () => {
     const yml = readRepo(".github/workflows/release.yml");

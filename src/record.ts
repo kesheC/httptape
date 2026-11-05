@@ -7,6 +7,9 @@ import { isHttpMethod } from "./types.js";
 
 const DEFAULT_REDACT = ["authorization", "cookie", "set-cookie", "proxy-authorization"];
 
+/** Default wall-clock cap for one recorded exchange. */
+const DEFAULT_RECORD_TIMEOUT_MS = 30_000;
+
 /**
  * Perform a real HTTP request and append the exchange to the tape file at
  * `options.outPath` (default `<name>.tape.json` in the current directory).
@@ -25,7 +28,13 @@ export async function record(
     throw new Error(`httptape records the seven standard methods, not ${method}`);
   }
   const requestBody = options.body == null ? null : String(options.body);
-  const response = await perform(transport, parsed, options, requestBody);
+  const response = await perform(
+    transport,
+    parsed,
+    options,
+    requestBody,
+    options.timeoutMs ?? DEFAULT_RECORD_TIMEOUT_MS,
+  );
 
   const tapePath = options.outPath ?? `${options.name}.tape.json`;
   const tape = await loadTapeSafe(tapePath, options.name);
@@ -57,22 +66,45 @@ function perform(
   parsed: URL,
   options: RequestOptions,
   body: string | null,
+  timeoutMs: number,
 ): Promise<Performed> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const settle = (fn: () => void): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+    const timer = setTimeout(
+      () =>
+        settle(() => {
+          const error = new Error(
+            `httptape record timed out after ${timeoutMs}ms waiting for ${parsed.host}${parsed.pathname}`,
+          );
+          req.destroy(error);
+          reject(error);
+        }),
+      timeoutMs,
+    );
     const req = transport(parsed, options, (res) => {
       const chunks: Buffer[] = [];
       res.on("data", (chunk: Buffer) => chunks.push(chunk));
-      res.on("end", () => {
-        const raw = Buffer.concat(chunks);
-        resolve({
-          status: res.statusCode ?? 0,
-          headers: flattenHeaders(res.headers),
-          sentHeaders: flattenHeaders(req.getHeaders()),
-          body: raw.toString("utf8"),
-        });
-      });
+      res.on("error", (error: Error) => settle(() => reject(error)));
+      res.on("end", () =>
+        settle(() =>
+          resolve({
+            status: res.statusCode ?? 0,
+            headers: flattenHeaders(res.headers),
+            sentHeaders: flattenHeaders(req.getHeaders()),
+            body: Buffer.concat(chunks).toString("utf8"),
+          }),
+        ),
+      );
     });
-    req.on("error", reject);
+    req.on("error", (error: Error) => settle(() => reject(error)));
     if (body != null) {
       req.write(body);
     }

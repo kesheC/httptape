@@ -2,3 +2,4 @@ dist/
 node_modules/
 release/
 demo/*.tape.json
+/demo.tape.json

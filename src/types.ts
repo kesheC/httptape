@@ -101,6 +101,8 @@ export interface RecordOptions {
   outPath?: string;
   /** Extra headers to strip from captures (case-insensitive names). */
   redactHeaders?: string[];
+  /** Wall-clock cap on the whole exchange, in milliseconds. Default 30000. */
+  timeoutMs?: number;
 }
 
 /** The subset of `http.ClientRequest` options httptape captures. */
