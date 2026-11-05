@@ -11,6 +11,18 @@ const DEFAULT_REDACT = ["authorization", "cookie", "set-cookie", "proxy-authoriz
 const DEFAULT_RECORD_TIMEOUT_MS = 30_000;
 
 /**
+ * Decode a captured body as UTF-8 text, or return null when the bytes are
+ * not valid UTF-8 (the tape promises text, never a lossy mojibake rewrite).
+ */
+export function decodeBody(bytes: Buffer): string | null {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Perform a real HTTP request and append the exchange to the tape file at
  * `options.outPath` (default `<name>.tape.json` in the current directory).
  * The tape is read, appended, and written on every call, so recording is
@@ -21,13 +33,20 @@ export async function record(
   url: string,
   options: RecordOptions & RequestOptions = { name: "tape" },
 ): Promise<Interaction> {
+  const name = options.name ?? "tape";
+  if (typeof name !== "string" || name.trim().length === 0) {
+    throw new Error("httptape record needs a non-empty tape name");
+  }
   const parsed = new URL(url);
   const transport = parsed.protocol === "https:" ? httpsRequest : httpRequest;
   const method = (options.method ?? "GET").toUpperCase();
   if (!isHttpMethod(method)) {
     throw new Error(`httptape records the seven standard methods, not ${method}`);
   }
-  const requestBody = options.body == null ? null : String(options.body);
+  // RFC 7231: a HEAD request carries no body. Sending one is undefined, so
+  // recording drops it instead of storing a body the replay can never match.
+  const requestBody =
+    method === "HEAD" || options.body == null ? null : String(options.body);
   const response = await perform(
     transport,
     parsed,
@@ -58,7 +77,7 @@ interface Performed {
   status: number;
   headers: Record<string, string>;
   sentHeaders: Record<string, string>;
-  body: string;
+  body: string | null;
 }
 
 function perform(
@@ -99,7 +118,7 @@ function perform(
             status: res.statusCode ?? 0,
             headers: flattenHeaders(res.headers),
             sentHeaders: flattenHeaders(req.getHeaders()),
-            body: Buffer.concat(chunks).toString("utf8"),
+            body: decodeBody(Buffer.concat(chunks)),
           }),
         ),
       );

@@ -153,6 +153,119 @@ describe("record resilience", () => {
   });
 });
 
+describe("third audit round fixes", () => {
+  it("stores null for a response body that is not valid UTF-8", async () => {
+    // types.ts promises text-or-null; a lossy U+FFFD rewrite used to be stored.
+    const binary = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/octet-stream" });
+      res.end(Buffer.from([0x00, 0xff, 0xfe]));
+    });
+    await new Promise<void>((resolve) => binary.listen(0, "127.0.0.1", resolve));
+    const bport = (binary.address() as { port: number }).port;
+    try {
+      const interaction = await record("http://127.0.0.1:" + bport + "/bin", {
+        name: "binary",
+        outPath: "binary-tmp.tape.json",
+      });
+      expect(interaction.responseBody).toBeNull();
+      // The text path still records text.
+      const interaction2 = await record("http://127.0.0.1:" + port + "/echo", {
+        name: "binary",
+        outPath: "binary-tmp.tape.json",
+      });
+      expect(interaction2.responseBody).toContain("body");
+    } finally {
+      binary.close();
+      rmSync("binary-tmp.tape.json", { force: true });
+    }
+  });
+
+  it("drops the body of a HEAD request instead of recording an unmatchable one", async () => {
+    const interaction = await record("http://127.0.0.1:" + port + "/echo", {
+      name: "headdrop",
+      outPath: "headdrop-tmp.tape.json",
+      method: "HEAD",
+      body: "ignored",
+    });
+    expect(interaction.method).toBe("HEAD");
+    expect(interaction.requestBody).toBeNull();
+    rmSync("headdrop-tmp.tape.json", { force: true });
+  });
+
+  it("rejects an empty tape name with a readable error", async () => {
+    await expect(
+      record("http://127.0.0.1:" + port + "/echo", { name: "  ", outPath: "noname-tmp.tape.json" }),
+    ).rejects.toThrow(/non-empty tape name/);
+  });
+
+  it("stub mode answers TRACE (and any method) with 599 instead of throwing", async () => {
+    // findMatch throws TapeError for non-standard methods; stub mode must
+    // dispatch before matching so the stub contract holds for every request.
+    const result = await replay(
+      { method: "TRACE", url: "http://127.0.0.1:" + port + "/anything" },
+      { tapePath: "release.tape.json", mode: "stub" },
+    );
+    expect(result.matched).toBe(false);
+    expect(result.status).toBe(599);
+    expect(result.headers["x-httptape"]).toBe("stub");
+  });
+
+  it("record mode starts from an empty tape when the file does not exist", async () => {
+    const missing = join("consumed", "never-recorded.tape.json");
+    rmSync(missing, { force: true });
+    const result = await replay(
+      { method: "GET", url: "http://127.0.0.1:" + port + "/echo" },
+      { tapePath: missing, mode: "record" },
+    );
+    expect(result.matched).toBe(true);
+    expect(result.status).toBe(201);
+    const tape = await loadTape(missing);
+    expect(tape.interactions).toHaveLength(1);
+    rmSync(missing, { force: true });
+  });
+
+  it("keys played state case-insensitively where the filesystem does", async () => {
+    const { tapeKey } = await import("../src/replay.js");
+    if (process.platform === "win32" || process.platform === "darwin") {
+      expect(tapeKey("C:\\A\\tape.json")).toBe(tapeKey("c:\\a\\tape.json"));
+    } else {
+      expect(tapeKey("/tmp/T.json")).toBe("/tmp/T.json");
+    }
+  });
+
+  it("validateTape rejects a non-ISO recordedAt on the tape and on interactions", async () => {
+    const { validateTape } = await import("../src/tape.js");
+    const { TapeError } = await import("../src/errors.js");
+    const base = emptyTape("iso");
+    (base.recordedAt as string) = "yesterday";
+    expect(() => validateTape(base)).toThrow(TapeError);
+    const badInteraction = emptyTape("iso2");
+    badInteraction.interactions.push({
+      method: "GET",
+      url: "http://x/",
+      requestHeaders: {},
+      requestBody: null,
+      status: 200,
+      responseHeaders: {},
+      responseBody: null,
+      recordedAt: "2026/11/04",
+    });
+    expect(() => validateTape(badInteraction)).toThrow(TapeError);
+    const good = emptyTape("iso3");
+    good.interactions.push({
+      method: "GET",
+      url: "http://x/",
+      requestHeaders: {},
+      requestBody: null,
+      status: 200,
+      responseHeaders: {},
+      responseBody: null,
+      recordedAt: "2026-11-04T00:00:00.000Z",
+    });
+    expect(() => validateTape(good)).not.toThrow();
+  });
+});
+
 describe("replay consumption keys on the resolved path", () => {
   it("consumes in order across ./relative and bare spellings of the same tape", async () => {
     const tapePath = join("consumed", "ordered.tape.json");

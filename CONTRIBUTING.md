@@ -10,6 +10,7 @@ CI runs these commands; every one must pass locally before you open a PR:
 npm ci
 npm run typecheck
 npm test
+npm run build
 npm run coverage
 npm audit --audit-level=high
 ```

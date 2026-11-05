@@ -34,7 +34,11 @@ jobs:
         run: sha256sum httptape-*.tgz httptape.tgz > SHA256SUMS.txt
       - name: Extract release notes
         run: |
-          awk '/^## \[/{if (found) exit; found=1} found{print}' CHANGELOG.md > notes.md
+          TAG="${GITHUB_REF_NAME#v}"
+          # Anchor on the tag's own '## [version]' heading; grabbing the first
+          # '## [' once shipped the [Unreleased] body as the release notes.
+          awk -v v="$TAG" 'index($0, "## [" v "]")==1{found=1; print; next} found && /^## \[/{exit} found{print}' CHANGELOG.md > notes.md
+          head -n 1 notes.md | grep -q "## \[$TAG\]" || { echo "CHANGELOG.md has no ## [$TAG] section"; exit 1; }
           head -n 40 notes.md > body.md
       - name: Create GitHub Release
         env:

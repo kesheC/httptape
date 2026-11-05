@@ -77,6 +77,31 @@ describe("ci guards", () => {
     expect(readRepo(".github/workflows/ci.yml")).toContain("permissions:");
     expect(readRepo(".github/workflows/ci.yml")).toContain("contents: read");
   });
+
+  it("pins CONTRIBUTING's command list to ci.yml in both directions", () => {
+    // CONTRIBUTING:17 claims the list is derived from ci.yml and pinned here.
+    // A one-way pin rots silently when either side changes.
+    const ci = readRepo(".github/workflows/ci.yml");
+    const runCommands = [...ci.matchAll(/- run: (.+)/g)].map((m) => m[1]!.trim());
+    expect(runCommands.length).toBeGreaterThan(0);
+    const contributing = readRepo("CONTRIBUTING.md");
+    for (const command of runCommands) {
+      expect(contributing).toContain(command);
+    }
+    // And nothing may claim to be CI-run without ci.yml actually running it:
+    // the gate block between the two ```bash fences lists exactly the CI runs.
+    const gateBlock = contributing.slice(contributing.indexOf("```bash"), contributing.indexOf("```", contributing.indexOf("```bash") + 7));
+    const listed = gateBlock.split("\n").filter((l) => l.startsWith("npm ")).map((l) => l.trim());
+    for (const command of listed) {
+      expect(runCommands).toContain(command);
+    }
+  });
+
+  it("keeps src VERSION equal to package.json version", () => {
+    const pkg = JSON.parse(readRepo("package.json")) as { version: string };
+    const cli = readRepo("src/cli.ts");
+    expect(cli).toContain('export const VERSION = "' + pkg.version + '"');
+  });
 });
 
 describe("cli entry guards", () => {
@@ -101,5 +126,15 @@ describe("release workflow guards", () => {
     const yml = readRepo(".github/workflows/release.yml");
     expect(yml).toContain("httptape-");
     expect(yml).toContain("httptape.tgz");
+  });
+
+  it("anchors release notes to the tag version and refuses missing sections", () => {
+    // The notes extraction once grabbed the FIRST '## [' heading, which was
+    // [Unreleased] - a release shipped 'nothing yet' as its notes.
+    const yml = readRepo(".github/workflows/release.yml");
+    const extract = yml.slice(yml.indexOf("Extract release notes"), yml.indexOf("Create GitHub Release"));
+    expect(extract).toContain('awk -v v="$TAG"');
+    expect(extract).toContain('grep -q "## \\[$TAG\\]"');
+    expect(extract).toContain("exit 1");
   });
 });

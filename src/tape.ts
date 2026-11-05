@@ -3,6 +3,9 @@ import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { TAPE_FORMAT_VERSION, type Interaction, type Tape } from "./types.js";
 import { TapeError } from "./errors.js";
 
+/** Shape of an ISO-8601 timestamp as this package writes it (always UTC "Z"). */
+const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+
 /** Validate a parsed JSON value as a {@link Tape}; throws {@link TapeError} with the reason. */
 export function validateTape(value: unknown): Tape {
   if (typeof value !== "object" || value === null) {
@@ -17,7 +20,7 @@ export function validateTape(value: unknown): Tape {
   if (typeof t["name"] !== "string" || t["name"].length === 0) {
     throw new TapeError("tape.name must be a non-empty string");
   }
-  if (typeof t["recordedAt"] !== "string") {
+  if (typeof t["recordedAt"] !== "string" || !ISO_8601.test(t["recordedAt"])) {
     throw new TapeError("tape.recordedAt must be an ISO-8601 string");
   }
   if (!Array.isArray(t["interactions"])) {
@@ -52,7 +55,9 @@ function validateInteraction(raw: unknown, index: number): void {
   need("status", "number");
   need("responseHeaders", "object");
   need("responseBody", "string|null");
-  need("recordedAt", "string");
+  if (typeof it["recordedAt"] !== "string" || !ISO_8601.test(it["recordedAt"])) {
+    throw new TapeError(`interactions[${index}].recordedAt must be an ISO-8601 string`);
+  }
 }
 
 /** Read and validate a tape file. */

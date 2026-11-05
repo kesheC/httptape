@@ -151,6 +151,8 @@ Performs the request for real and appends the exchange to the tape file (`option
 
 **Redirects are recorded, not followed.** A `3xx` response goes into the tape exactly as the server returned it — status, headers, body — with no `Location` chase. Record each hop of a redirect chain as its own interaction; `replay` then serves the recorded hops in tape order.
 
+**Bodies are stored as text or null.** A request or response body is stored as the string it carries only when the bytes decode as UTF-8; binary payloads are stored as `null` (never a lossy rewrite), and a `HEAD` request records no body at all.
+
 ### `replay(request, options)`
 
 Answers one request from the tape. Options: `tapePath` (required), `mode` (`strict` / `stub` / `record`), `matchBody` (also compare request bodies; default false). Returns `{ matched, status, headers, body, interaction }`.
@@ -177,14 +179,14 @@ $ npm ci
 $ npm run build -s
 $ npm test 2>&1 | grep -E 'Test Files|Tests '
  Test Files  5 passed (5)
-      Tests  52 passed (52)
+      Tests  62 passed (62)
 ```
 
 Coverage gate (floors 80/70/85/80 in `vitest.config.ts`):
 
 ```bash
 $ npm run coverage 2>&1 | grep 'All files' | sed 's/ *$//'
-All files  |   93.36 |    88.09 |   94.73 |   94.14 |
+All files  |   95.15 |    90.54 |   95.12 |   95.92 |
 ```
 
 ## API
@@ -263,6 +265,8 @@ unmatched: no recorded interaction for DELETE http://127.0.0.1:49678/greet in de
 
 **重定向原样录制。** `record` 不跟随重定向：`3xx` 响应按服务器原样（状态、头、体）入库，不追 `Location`；重定向链的每一跳各自录制一条交互，`replay` 按磁带顺序依次返回各跳。
 
+**请求体/响应体存文本或 null。** 请求与响应体仅在其字节能按 UTF-8 解码时以字符串入库；二进制载荷存 `null`（绝不有损改写），`HEAD` 请求则完全不记请求体。
+
 并发注意：对同一磁带并发使用 `replay(mode: "record")` 不受支持——每次未匹配都要对磁带做读-改-写，并发录制可能丢交互；同一磁带的录制请串行。
 
 ### CLI
@@ -279,10 +283,10 @@ demo/demo.tape.json: 1 interactions, format v1 (demo)
 $ npm ci && npm run build -s
 $ npm test 2>&1 | grep -E 'Test Files|Tests '
  Test Files  5 passed (5)
-      Tests  52 passed (52)
+      Tests  62 passed (62)
 ```
 
-覆盖率闸门（`vitest.config.ts` 中下限 80/70/85/80）：全文件 93.36 语句 / 88.09 分支 / 94.73 函数 / 94.14 行。
+覆盖率闸门（`vitest.config.ts` 中下限 80/70/85/80）：全文件 95.15 语句 / 90.54 分支 / 95.12 函数 / 95.92 行。
 
 ### 许可
 
